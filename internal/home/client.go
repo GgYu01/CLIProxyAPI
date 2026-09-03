@@ -1651,7 +1651,16 @@ func processPluginSyncCommand(ctx context.Context, options *redis.Options, comma
 	if pluginSyncClient == nil {
 		return ErrNotConnected
 	}
+	closeOnCancel := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = pluginSyncClient.Close()
+		case <-closeOnCancel:
+		}
+	}()
 	errProcess := pluginSyncClient.Process(ctx, command)
+	close(closeOnCancel)
 	errClose := pluginSyncClient.Close()
 	if errContext := ctx.Err(); errContext != nil {
 		return errContext
