@@ -207,6 +207,10 @@ type Client struct {
 	legacyMembership     bool
 	clusterNodes         []clusterNode
 	reconnectFailures    int
+	// subscriptionTimeouts counts consecutive Home subscription receive
+	// timeouts. A single 3s stall must not flip the cluster node; failover
+	// needs the same consecutive-miss bar as reconnect failures.
+	subscriptionTimeouts int
 }
 
 func New(homeCfg config.HomeConfig) *Client {
@@ -914,8 +918,14 @@ func (c *Client) failoverAfterSubscriptionTimeout() (bool, string) {
 
 	if !c.clusterDiscoveryEnabledLocked() {
 		c.reconnectFailures = 0
+		c.subscriptionTimeouts = 0
 		return false, ""
 	}
+	c.subscriptionTimeouts++
+	if c.subscriptionTimeouts < homeReconnectFailoverThreshold {
+		return false, ""
+	}
+	c.subscriptionTimeouts = 0
 	c.reconnectFailures = 0
 	return c.switchToNextNodeLocked()
 }
@@ -956,6 +966,7 @@ func (c *Client) resetReconnectFailures() {
 	}
 	c.mu.Lock()
 	c.reconnectFailures = 0
+	c.subscriptionTimeouts = 0
 	c.mu.Unlock()
 }
 
