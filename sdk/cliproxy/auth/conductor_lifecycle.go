@@ -42,10 +42,8 @@ func (m *Manager) RegisterExecutor(executor ProviderExecutor) {
 
 	next := newExecutorGeneration(executor)
 	var previous *executorGeneration
-	var replaced ProviderExecutor
 	var toReschedule []string
 	m.mu.Lock()
-	replaced = m.executors[provider]
 	if m.executorGenerations == nil {
 		m.executorGenerations = make(map[string]*executorGeneration)
 	}
