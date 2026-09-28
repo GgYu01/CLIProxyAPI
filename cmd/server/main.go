@@ -627,6 +627,11 @@ func main() {
 	}
 	redisqueue.SetUsageStatisticsEnabled(cfg.UsageStatisticsEnabled)
 	redisqueue.SetRetentionSeconds(cfg.RedisUsageQueueRetentionSeconds)
+	redisqueue.SetSpoolMaxBytes(cfg.RedisUsageQueueSpoolMaxBytes)
+	if err = redisqueue.SetSpoolDirectory(cfg.RedisUsageQueueSpoolDir); err != nil {
+		log.Errorf("failed to configure usage queue spool: %v", err)
+		return
+	}
 	coreauth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 	coreauth.SetTransientErrorCooldownSeconds(cfg.TransientErrorCooldownSeconds)
 

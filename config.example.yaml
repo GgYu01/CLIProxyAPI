@@ -1082,6 +1082,11 @@ observability:
     # Default: 60. Max: 3600.
     redis-usage-queue-retention-seconds: 60
 
+    # Optional durable fallback when no usage subscriber is available. Records are
+    # replayed in order and removed after Keeper consumes them.
+    redis-usage-queue-spool-dir: ""
+    redis-usage-queue-spool-max-bytes: 536870912
+
   # Enable pprof HTTP debug server (host:port). Keep it bound to localhost for safety.
   pprof:
     enable: false

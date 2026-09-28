@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/redisqueue"
+	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
 )
 
 type usageQueueRecord []byte
@@ -18,6 +19,18 @@ func (r usageQueueRecord) MarshalJSON() ([]byte, error) {
 		return append([]byte(nil), r...), nil
 	}
 	return json.Marshal(string(r))
+}
+
+// GetUsageQueueStats reports queue state without consuming usage records.
+func (h *Handler) GetUsageQueueStats(c *gin.Context) {
+	if h == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "handler unavailable"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"dispatch": coreusage.DefaultManager().Stats(),
+		"delivery": redisqueue.Stats(),
+	})
 }
 
 // GetUsageQueue pops queued usage records from the usage queue.

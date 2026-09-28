@@ -66,6 +66,39 @@ func TestGetUsageQueueInvalidCountDoesNotPop(t *testing.T) {
 	})
 }
 
+func TestGetUsageQueueStatsIsReadOnly(t *testing.T) {
+	withManagementUsageQueue(t, func() {
+		redisqueue.Enqueue([]byte(`{"id":1}`))
+
+		rec := httptest.NewRecorder()
+		ginCtx, _ := gin.CreateTestContext(rec)
+		ginCtx.Request = httptest.NewRequest(http.MethodGet, "/v0/management/usage-queue/stats", nil)
+
+		h := &Handler{}
+		h.GetUsageQueueStats(ginCtx)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var payload struct {
+			Delivery struct {
+				MemoryRecords int `json:"memory_records"`
+			} `json:"delivery"`
+		}
+		if errUnmarshal := json.Unmarshal(rec.Body.Bytes(), &payload); errUnmarshal != nil {
+			t.Fatalf("unmarshal response: %v", errUnmarshal)
+		}
+		if payload.Delivery.MemoryRecords != 1 {
+			t.Fatalf("delivery.memory_records = %d, want 1", payload.Delivery.MemoryRecords)
+		}
+
+		remaining := redisqueue.PopOldest(10)
+		if len(remaining) != 1 || string(remaining[0]) != `{"id":1}` {
+			t.Fatalf("stats consumed queue: remaining = %q", remaining)
+		}
+	})
+}
+
 func withManagementUsageQueue(t *testing.T, fn func()) {
 	t.Helper()
 

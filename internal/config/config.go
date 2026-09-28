@@ -69,6 +69,12 @@ type Config struct {
 	// Default: 60. Max: 3600.
 	RedisUsageQueueRetentionSeconds int `yaml:"redis-usage-queue-retention-seconds" json:"redis-usage-queue-retention-seconds"`
 
+	// RedisUsageQueueSpoolDir enables an on-disk usage record spool when set.
+	RedisUsageQueueSpoolDir string `yaml:"redis-usage-queue-spool-dir" json:"redis-usage-queue-spool-dir"`
+
+	// RedisUsageQueueSpoolMaxBytes bounds payload bytes retained by the disk spool.
+	RedisUsageQueueSpoolMaxBytes int64 `yaml:"redis-usage-queue-spool-max-bytes" json:"redis-usage-queue-spool-max-bytes"`
+
 	// DisableCooling disables auth/model cooldown scheduling when true unless a credential or provider overrides it.
 	DisableCooling bool `yaml:"disable-cooling" json:"disable-cooling"`
 

@@ -69,6 +69,7 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	cfg.ErrorLogsMaxFiles = 10
 	cfg.UsageStatisticsEnabled = false
 	cfg.RedisUsageQueueRetentionSeconds = 60
+	cfg.RedisUsageQueueSpoolMaxBytes = 512 << 20
 	cfg.DisableCooling = false
 	cfg.SaveCooldownStatus = false
 	cfg.TransientErrorCooldownSeconds = 0
@@ -153,6 +154,10 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	} else if cfg.RedisUsageQueueRetentionSeconds > 3600 {
 		log.WithField("value", cfg.RedisUsageQueueRetentionSeconds).Warn("redis-usage-queue-retention-seconds too large; clamping to 3600")
 		cfg.RedisUsageQueueRetentionSeconds = 3600
+	}
+	cfg.RedisUsageQueueSpoolDir = strings.TrimSpace(cfg.RedisUsageQueueSpoolDir)
+	if cfg.RedisUsageQueueSpoolMaxBytes <= 0 {
+		cfg.RedisUsageQueueSpoolMaxBytes = 512 << 20
 	}
 
 	if cfg.MaxRetryCredentials < 0 {
