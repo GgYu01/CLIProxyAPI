@@ -54,8 +54,12 @@ func (w *Watcher) reloadConfigIfChanged() {
 		log.Errorf("failed to read config file for hash check: %v", err)
 		return
 	}
-	if len(data) == 0 {
-		log.Debugf("ignoring empty config file write event")
+	// Empty or truncated writes must not replace a live generation. The
+	// proxy-sync writer (outside this repo) is required to publish via
+	// same-dir tmp + flush/fsync + atomic rename so readers never observe
+	// a partial file; this guard is the last line of defense if they do.
+	if errInspect := config.InspectConfigPayload(data); errInspect != nil {
+		log.WithError(errInspect).Warn("ignoring empty or partial config write; keeping previous generation")
 		return
 	}
 	sum := sha256.Sum256(data)
@@ -95,6 +99,19 @@ func (w *Watcher) reloadConfig() bool {
 		return false
 	}
 
+	w.clientsMutex.RLock()
+	currentRevision := w.committedRevision
+	var currentConfig *config.Config
+	_ = yaml.Unmarshal(w.oldConfigYaml, &currentConfig)
+	w.clientsMutex.RUnlock()
+	if currentConfig != nil && currentConfig.Revision > currentRevision {
+		currentRevision = currentConfig.Revision
+	}
+	if errRevision := config.CheckMonotonicRevision(&config.Config{Revision: currentRevision}, newConfig); errRevision != nil {
+		log.WithError(errRevision).Warn("rejected stale config revision; keeping previous generation")
+		return false
+	}
+
 	if w.mirroredAuthDir != "" {
 		newConfig.AuthDir = w.mirroredAuthDir
 	} else {
@@ -110,6 +127,9 @@ func (w *Watcher) reloadConfig() bool {
 	_ = yaml.Unmarshal(w.oldConfigYaml, &oldConfig)
 	w.oldConfigYaml, _ = yaml.Marshal(newConfig)
 	w.config = newConfig
+	if newConfig.Revision > w.committedRevision {
+		w.committedRevision = newConfig.Revision
+	}
 	w.clientsMutex.Unlock()
 
 	var affectedOAuthProviders []string

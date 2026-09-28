@@ -66,8 +66,9 @@ type Server struct {
 	accessManager *sdkaccess.Manager
 
 	// requestLogger is the request logger instance for dynamic configuration updates.
-	requestLogger logging.RequestLogger
-	loggerToggle  func(bool)
+	requestLogger    logging.RequestLogger
+	loggerToggle     func(bool)
+	requestAdmission *middleware.RequestAdmission
 
 	// configFilePath is the absolute path to the YAML config file for persistence.
 	configFilePath string
@@ -165,6 +166,11 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		}
 	}
 
+	requestAdmission := middleware.NewRequestAdmission(requestAdmissionRuntimeConfig(cfg.RequestAdmission))
+	if cfg.RequestAdmission.Enabled {
+		engine.Use(requestAdmission.Middleware())
+	}
+
 	engine.Use(corsMiddleware())
 	wd, err := os.Getwd()
 	if err != nil {
@@ -183,6 +189,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		accessManager:       accessManager,
 		requestLogger:       requestLogger,
 		loggerToggle:        toggle,
+		requestAdmission:    requestAdmission,
 		configFilePath:      configFilePath,
 		currentPath:         wd,
 		envManagementSecret: envManagementSecret,

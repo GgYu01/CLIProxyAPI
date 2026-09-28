@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	apihandlers "github.com/router-for-me/CLIProxyAPI/v7/sdk/api/handlers"
-	sdkconfig "github.com/router-for-me/CLIProxyAPI/v7/sdk/config"
+	apihandlers "github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers"
+	sdkconfig "github.com/router-for-me/CLIProxyAPI/v8/sdk/config"
 )
 
 func TestRequestAdmissionProductionDefaults(t *testing.T) {

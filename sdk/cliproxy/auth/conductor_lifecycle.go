@@ -40,11 +40,19 @@ func (m *Manager) RegisterExecutor(executor ProviderExecutor) {
 		return
 	}
 
+	next := newExecutorGeneration(executor)
+	var previous *executorGeneration
 	var replaced ProviderExecutor
 	var toReschedule []string
 	m.mu.Lock()
 	replaced = m.executors[provider]
+	if m.executorGenerations == nil {
+		m.executorGenerations = make(map[string]*executorGeneration)
+	}
+	previous = m.executorGenerations[provider]
+	m.executorGenerations[provider] = next
 	m.executors[provider] = executor
+	m.rememberLiveGenerationLocked(provider, next)
 	for id, auth := range m.auths {
 		if auth != nil && strings.EqualFold(executorKeyFromAuth(auth), provider) {
 			toReschedule = append(toReschedule, id)
@@ -56,11 +64,12 @@ func (m *Manager) RegisterExecutor(executor ProviderExecutor) {
 		m.queueRefreshReschedule(id)
 	}
 
-	if replaced == nil || replaced == executor {
+	if previous == nil || previous.executor == executor {
 		return
 	}
-	if closer, ok := replaced.(ExecutionSessionCloser); ok && closer != nil {
-		closer.CloseExecutionSession(CloseAllExecutionSessionsID)
+	previous.draining.Store(true)
+	if previous.active.Load() == 0 {
+		closeExecutorGeneration(previous, "replaced idle")
 	}
 }
 
@@ -72,7 +81,78 @@ func (m *Manager) UnregisterExecutor(provider string) {
 	}
 	m.mu.Lock()
 	delete(m.executors, provider)
+	gen := m.executorGenerations[provider]
+	delete(m.executorGenerations, provider)
 	m.mu.Unlock()
+	if gen == nil {
+		return
+	}
+	gen.draining.Store(true)
+	if gen.active.Load() == 0 {
+		closeExecutorGeneration(gen, "unregistered idle")
+	}
+}
+
+// RevokeAuth explicitly revokes one credential identified by authID. It stops
+// new selection for the auth and closes only execution sessions attributable
+// to it, leaving all other auths and their sessions untouched. The cause is
+// recorded for audit. It returns the number of closed sessions.
+func (m *Manager) RevokeAuth(authID, cause string) int {
+	authID = strings.TrimSpace(authID)
+	if m == nil || authID == "" {
+		return 0
+	}
+	m.mu.Lock()
+	if stored, ok := m.auths[authID]; ok && stored != nil {
+		clone := stored.Clone()
+		clone.Disabled = true
+		m.auths[authID] = clone
+	}
+	type target struct {
+		sessionID string
+		provider  string
+	}
+	var targets []target
+	for sessionID, sessionAuths := range m.homeRuntimeAuths {
+		if sel, ok := sessionAuths[authID]; ok && sel != nil {
+			targets = append(targets, target{sessionID: sessionID, provider: strings.ToLower(strings.TrimSpace(sel.Provider))})
+			delete(sessionAuths, authID)
+		}
+	}
+	if m.revokedCauses == nil {
+		m.revokedCauses = make(map[string]string)
+	}
+	if strings.TrimSpace(cause) != "" {
+		m.revokedCauses[authID] = cause
+	}
+	closers := make(map[ProviderExecutor]struct{})
+	for _, t := range targets {
+		if exec := m.executors[t.provider]; exec != nil {
+			closers[exec] = struct{}{}
+		}
+		for _, gen := range m.liveGenerationsLocked(t.provider) {
+			if gen != nil && gen.executor != nil {
+				closers[gen.executor] = struct{}{}
+			}
+		}
+	}
+	m.mu.Unlock()
+	closed := 0
+	seenSession := make(map[string]struct{})
+	for _, t := range targets {
+		key := t.provider + "\x00" + t.sessionID
+		if _, seen := seenSession[key]; seen {
+			continue
+		}
+		seenSession[key] = struct{}{}
+		for exec := range closers {
+			if closer, ok := exec.(ExecutionSessionCloser); ok && closer != nil {
+				closer.CloseExecutionSession(t.sessionID)
+			}
+		}
+		closed++
+	}
+	return closed
 }
 
 // Register inserts a new auth entry into the manager.

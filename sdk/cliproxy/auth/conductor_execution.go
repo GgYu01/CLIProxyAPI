@@ -2065,6 +2065,8 @@ func (m *Manager) HttpRequest(ctx context.Context, auth *Auth, req *http.Request
 	if exec == nil {
 		return nil, &Error{Code: "provider_not_found", Message: "executor not registered for provider: " + providerKey}
 	}
+	lease := m.holdExecutorGeneration(exec)
+	defer lease.Release()
 	return exec.HttpRequest(ctx, auth, req)
 }
 

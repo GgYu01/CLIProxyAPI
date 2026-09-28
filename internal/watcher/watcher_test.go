@@ -1828,3 +1828,89 @@ func TestScheduleProcessEventsStopsOnContextDone(t *testing.T) {
 func hexString(data []byte) string {
 	return strings.ToLower(fmt.Sprintf("%x", data))
 }
+
+func TestReloadConfigRejectsStaleRevisionAndPartialWrites(t *testing.T) {
+	tmpDir := t.TempDir()
+	authDir := filepath.Join(tmpDir, "auth")
+	if err := os.MkdirAll(authDir, 0o755); err != nil {
+		t.Fatalf("failed to create auth dir: %v", err)
+	}
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("revision: 5\nport: 8080\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	var reloads int32
+	w := &Watcher{
+		configPath:     configPath,
+		authDir:        authDir,
+		reloadCallback: func(*config.Config) { atomic.AddInt32(&reloads, 1) },
+	}
+	w.SetConfig(&config.Config{Revision: 5, Port: 8080, AuthDir: authDir})
+	if ok := w.reloadConfig(); !ok {
+		t.Fatal("equal-or-newer revision should load")
+	}
+
+	if err := os.WriteFile(configPath, []byte("revision: 4\nport: 9090\n"), 0o644); err != nil {
+		t.Fatalf("write stale config: %v", err)
+	}
+	if ok := w.reloadConfig(); ok {
+		t.Fatal("stale revision overwrote the live generation")
+	}
+	w.clientsMutex.RLock()
+	if w.config == nil || w.config.Port != 8080 || w.config.Revision != 5 {
+		w.clientsMutex.RUnlock()
+		t.Fatalf("stale reload mutated live config: %+v", w.config)
+	}
+	w.clientsMutex.RUnlock()
+
+	if err := os.WriteFile(configPath, []byte("proxy-url: \"http://proxy.local"), 0o644); err != nil {
+		t.Fatalf("write partial config: %v", err)
+	}
+	w.reloadConfigIfChanged()
+	w.clientsMutex.RLock()
+	if w.config == nil || w.config.Revision != 5 {
+		w.clientsMutex.RUnlock()
+		t.Fatalf("partial write mutated live config: %+v", w.config)
+	}
+	w.clientsMutex.RUnlock()
+
+	if err := os.WriteFile(configPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write empty config: %v", err)
+	}
+	w.reloadConfigIfChanged()
+	w.clientsMutex.RLock()
+	defer w.clientsMutex.RUnlock()
+	if w.config == nil || w.config.Revision != 5 {
+		t.Fatalf("empty write mutated live config: %+v", w.config)
+	}
+}
+
+func TestReloadConfigRejectsInvalidProxyURL(t *testing.T) {
+	tmpDir := t.TempDir()
+	authDir := filepath.Join(tmpDir, "auth")
+	if err := os.MkdirAll(authDir, 0o755); err != nil {
+		t.Fatalf("failed to create auth dir: %v", err)
+	}
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("revision: 2\nproxy-url: socks5://egress:1080\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	w := &Watcher{configPath: configPath, authDir: authDir}
+	w.SetConfig(&config.Config{Revision: 2, AuthDir: authDir})
+	if ok := w.reloadConfig(); !ok {
+		t.Fatal("valid proxy-url should load")
+	}
+
+	if err := os.WriteFile(configPath, []byte("revision: 3\nproxy-url: not-a-url\n"), 0o644); err != nil {
+		t.Fatalf("write invalid proxy: %v", err)
+	}
+	if ok := w.reloadConfig(); ok {
+		t.Fatal("invalid proxy-url overwrote the live generation")
+	}
+	w.clientsMutex.RLock()
+	defer w.clientsMutex.RUnlock()
+	if w.config == nil || w.config.Revision != 2 {
+		t.Fatalf("invalid proxy mutated live config: %+v", w.config)
+	}
+}

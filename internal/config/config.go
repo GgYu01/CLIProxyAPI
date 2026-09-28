@@ -13,6 +13,11 @@ type Config struct {
 	// Port is the network port on which the API server will listen.
 	Port int `yaml:"port" json:"-"`
 
+	// Revision is a monotonic proxy-sync generation counter. Stale or older
+	// revisions must never overwrite a newer committed generation. Zero means
+	// the payload does not participate in the revision protocol.
+	Revision int64 `yaml:"revision,omitempty" json:"revision,omitempty"`
+
 	// TrustedProxies lists the IPs or CIDRs allowed to provide forwarded client IP headers.
 	// The server applies this list at startup; changing it requires a restart.
 	TrustedProxies []string `yaml:"trusted-proxies" json:"trusted-proxies"`
@@ -74,6 +79,10 @@ type Config struct {
 
 	// RedisUsageQueueSpoolMaxBytes bounds payload bytes retained by the disk spool.
 	RedisUsageQueueSpoolMaxBytes int64 `yaml:"redis-usage-queue-spool-max-bytes" json:"redis-usage-queue-spool-max-bytes"`
+
+	// RequestAdmission is the bounded in-process replacement for cpa-queue.
+	// It limits waiting work without imposing a deadline on accepted requests.
+	RequestAdmission RequestAdmissionConfig `yaml:"request-admission" json:"request-admission"`
 
 	// DisableCooling disables auth/model cooldown scheduling when true unless a credential or provider overrides it.
 	DisableCooling bool `yaml:"disable-cooling" json:"disable-cooling"`

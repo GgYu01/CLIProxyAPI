@@ -374,6 +374,40 @@ type RoutingConfig struct {
 	// When false, subagents are distributed across the credential pool via the fallback selector.
 	// Default: true. Ignored when SessionAffinity is false.
 	SessionAffinitySubagents *bool `yaml:"session-affinity-subagents,omitempty" json:"session-affinity-subagents,omitempty"`
+
+	// SessionAffinityStrict keeps an explicitly pinned Codex session on the same
+	// credential and fixed proxy when that credential is temporarily unavailable.
+	SessionAffinityStrict bool `yaml:"session-affinity-strict,omitempty" json:"session-affinity-strict,omitempty"`
+
+	// SessionAffinityStore is the rollback-compatible version 1 pin file.
+	SessionAffinityStore string `yaml:"session-affinity-store,omitempty" json:"session-affinity-store,omitempty"`
+
+	// SessionAffinityExclude is a JSON list of credential prefixes that cannot
+	// receive new strict session bindings.
+	SessionAffinityExclude string `yaml:"session-affinity-exclude,omitempty" json:"session-affinity-exclude,omitempty"`
+}
+
+// RequestAdmissionConfig bounds work waiting inside CPA. All time values are
+// pre-acceptance waits in seconds; they never terminate an accepted request.
+type RequestAdmissionConfig struct {
+	Enabled                    bool           `yaml:"enabled" json:"enabled"`
+	MaxInFlight                int            `yaml:"max-inflight" json:"max-inflight"`
+	MaxWaiting                 int            `yaml:"max-waiting" json:"max-waiting"`
+	WaitSeconds                int            `yaml:"wait-seconds" json:"wait-seconds"`
+	ImageMaxInFlight           int            `yaml:"image-max-inflight" json:"image-max-inflight"`
+	ImageMaxWaiting            int            `yaml:"image-max-waiting" json:"image-max-waiting"`
+	ImageWaitSeconds           int            `yaml:"image-wait-seconds" json:"image-wait-seconds"`
+	MaxBodyBytes               int64          `yaml:"max-body-bytes" json:"max-body-bytes"`
+	BodyBudgetBytes            int64          `yaml:"body-budget-bytes" json:"body-budget-bytes"`
+	BodyBudgetWaitSeconds      int            `yaml:"body-budget-wait-seconds" json:"body-budget-wait-seconds"`
+	LargeBodyThresholdBytes    int64          `yaml:"large-body-threshold-bytes" json:"large-body-threshold-bytes"`
+	LargeBodyMaxInFlight       int            `yaml:"large-body-max-inflight" json:"large-body-max-inflight"`
+	LargeBodyWaitSeconds       int            `yaml:"large-body-wait-seconds" json:"large-body-wait-seconds"`
+	ModelRPM                   map[string]int `yaml:"model-rpm" json:"model-rpm"`
+	ModelRPMWindowSeconds      int            `yaml:"model-rpm-window-seconds" json:"model-rpm-window-seconds"`
+	ModelRPMMaxWaiting         int            `yaml:"model-rpm-max-waiting" json:"model-rpm-max-waiting"`
+	FirstByteTimeoutSeconds    int            `yaml:"first-byte-timeout-seconds" json:"first-byte-timeout-seconds"`
+	FirstByteRetryAfterSeconds int            `yaml:"first-byte-retry-after-seconds" json:"first-byte-retry-after-seconds"`
 }
 
 // OAuthModelAlias defines a model ID alias for a specific channel.

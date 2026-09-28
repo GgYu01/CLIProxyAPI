@@ -147,6 +147,9 @@ type Manager struct {
 	cooldownStore             CooldownStateStore
 	pendingCooldownStateStore CooldownStateStore
 	executors                 map[string]ProviderExecutor
+	executorGenerations       map[string]*executorGeneration
+	executorLiveGenerations   map[string][]*executorGeneration
+	revokedCauses             map[string]string
 	selector                  Selector
 	hook                      Hook
 	resultPolicy              atomic.Pointer[resultPolicyHolder]
@@ -216,9 +219,11 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
 		hook = NoopHook{}
 	}
 	manager := &Manager{
-		store:                 store,
-		executors:             make(map[string]ProviderExecutor),
-		selector:              selector,
+		store:                   store,
+		executors:               make(map[string]ProviderExecutor),
+		executorGenerations:     make(map[string]*executorGeneration),
+		executorLiveGenerations: make(map[string][]*executorGeneration),
+		selector:                selector,
 		hook:                  hook,
 		auths:                 make(map[string]*Auth),
 		authEpochs:            make(map[string]uint64),
