@@ -24,6 +24,7 @@ const (
 	DisableImageGenerationAll
 	DisableImageGenerationChat
 	DisableImageGenerationPassthrough
+	DisableImageGenerationCodex
 )
 
 func (m DisableImageGenerationMode) String() string {
@@ -36,6 +37,8 @@ func (m DisableImageGenerationMode) String() string {
 		return "chat"
 	case DisableImageGenerationPassthrough:
 		return "passthrough"
+	case DisableImageGenerationCodex:
+		return "codex"
 	default:
 		return "false"
 	}
@@ -49,6 +52,8 @@ func (m DisableImageGenerationMode) MarshalYAML() (any, error) {
 		return "chat", nil
 	case DisableImageGenerationPassthrough:
 		return "passthrough", nil
+	case DisableImageGenerationCodex:
+		return "codex", nil
 	default:
 		return false, nil
 	}
@@ -71,6 +76,8 @@ func (m DisableImageGenerationMode) MarshalJSON() ([]byte, error) {
 		return json.Marshal("chat")
 	case DisableImageGenerationPassthrough:
 		return json.Marshal("passthrough")
+	case DisableImageGenerationCodex:
+		return json.Marshal("codex")
 	default:
 		return []byte("false"), nil
 	}
@@ -141,7 +148,9 @@ func parseDisableImageGenerationString(s string) (DisableImageGenerationMode, er
 		return DisableImageGenerationChat, nil
 	case "passthrough":
 		return DisableImageGenerationPassthrough, nil
+	case "codex", "openai", "codex-openai":
+		return DisableImageGenerationCodex, nil
 	default:
-		return DisableImageGenerationOff, fmt.Errorf("invalid disable-image-generation value %q (allowed: true, false, chat, passthrough)", s)
+		return DisableImageGenerationOff, fmt.Errorf("invalid disable-image-generation value %q (allowed: true, false, chat, passthrough, codex)", s)
 	}
 }
