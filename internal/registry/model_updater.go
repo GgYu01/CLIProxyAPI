@@ -126,6 +126,11 @@ func tryRefreshModels(ctx context.Context, label string) {
 		parsed.Meta = oldData.Meta
 	}
 
+	// Upstream catalog maintenance can drop models we still serve and bill.
+	// Re-add embedded-only entries so a remote refresh can never silently
+	// unroute them. Remote definitions win on ID conflicts.
+	parsed = mergeEmbeddedExtras(parsed)
+
 	// Detect changes before updating store.
 	changed := detectChangedProviders(oldData, parsed)
 
@@ -141,6 +146,73 @@ func tryRefreshModels(ctx context.Context, label string) {
 
 	log.Infof("%s completed from %s, changes detected for providers: %v", label, url, changed)
 	notifyModelRefresh(changed)
+}
+
+// mergeEmbeddedExtras re-adds embedded catalog models that the remote catalog
+// no longer lists, per section. Remote definitions win on ID conflicts;
+// embedded-only entries are appended so locally shipped models stay routable.
+func mergeEmbeddedExtras(remote *staticModelsJSON) *staticModelsJSON {
+	if remote == nil {
+		return nil
+	}
+	embedded := modelsCatalogStore.data
+	if embedded == nil || embedded == remote {
+		return remote
+	}
+
+	merged := *remote
+	merged.Claude = mergeModelSection(embedded.Claude, remote.Claude)
+	merged.Gemini = mergeModelSection(embedded.Gemini, remote.Gemini)
+	merged.Vertex = mergeModelSection(embedded.Vertex, remote.Vertex)
+	merged.AIStudio = mergeModelSection(embedded.AIStudio, remote.AIStudio)
+	merged.CodexFree = mergeModelSection(embedded.CodexFree, remote.CodexFree)
+	merged.CodexTeam = mergeModelSection(embedded.CodexTeam, remote.CodexTeam)
+	merged.CodexPlus = mergeModelSection(embedded.CodexPlus, remote.CodexPlus)
+	merged.CodexPro = mergeModelSection(embedded.CodexPro, remote.CodexPro)
+	merged.Kimi = mergeModelSection(embedded.Kimi, remote.Kimi)
+	merged.Antigravity = mergeModelSection(embedded.Antigravity, remote.Antigravity)
+	merged.XAI = mergeModelSection(embedded.XAI, remote.XAI)
+	merged.Devin = mergeModelSection(embedded.Devin, remote.Devin)
+	merged.Meta = mergeModelSection(embedded.Meta, remote.Meta)
+	return &merged
+}
+
+func mergeModelSection(embedded, remote []*ModelInfo) []*ModelInfo {
+	if len(embedded) == 0 {
+		return remote
+	}
+	remoteIDs := make(map[string]struct{}, len(remote))
+	for _, model := range remote {
+		if model == nil {
+			continue
+		}
+		id := strings.ToLower(strings.TrimSpace(model.ID))
+		if id != "" {
+			remoteIDs[id] = struct{}{}
+		}
+	}
+	merged := make([]*ModelInfo, 0, len(remote)+len(embedded))
+	merged = append(merged, remote...)
+	added := false
+	for _, model := range embedded {
+		if model == nil {
+			continue
+		}
+		id := strings.ToLower(strings.TrimSpace(model.ID))
+		if id == "" {
+			continue
+		}
+		if _, exists := remoteIDs[id]; exists {
+			continue
+		}
+		remoteIDs[id] = struct{}{}
+		merged = append(merged, cloneModelInfo(model))
+		added = true
+	}
+	if !added {
+		return remote
+	}
+	return merged
 }
 
 // fetchModelsFromRemote tries all remote URLs and returns the parsed model catalog
